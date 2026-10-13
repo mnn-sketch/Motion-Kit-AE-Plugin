@@ -9,10 +9,18 @@ A dockable ScriptUI panel for Adobe After Effects with four quick tools:
 
 ## Install
 
-Copy `Motion Kit.jsx` into the ScriptUI Panels folder, then restart After Effects:
+No admin rights needed. You install it from inside After Effects:
 
-```bash
-sudo cp "Motion Kit.jsx" "/Applications/Adobe After Effects 2026/Scripts/ScriptUI Panels/"
-```
+1. Download `Motion Kit.jsx` from this repo.
+2. In After Effects, go to **File → Scripts → Install ScriptUI Panel…** and choose `Motion Kit.jsx`.
+3. Restart After Effects.
 
-Open it from **Window → Motion Kit.jsx**.
+## Open the panel
+
+Open the **Window** menu and scroll to the very bottom. Installed panels are listed there, below the built-in ones. Click **Motion Kit.jsx**.
+
+It opens as a normal panel. Drag it by its tab to dock it anywhere in your workspace, and After Effects will remember where you put it.
+
+## Update
+
+To install a newer version, repeat the install steps with the new `Motion Kit.jsx`. Let it overwrite the old one, then restart After Effects.
