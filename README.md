@@ -6,6 +6,7 @@ A dockable ScriptUI panel for Adobe After Effects with four quick tools:
 - **Easing** – ease in / ease out influence (plus a linked "Both" slider) applied to selected keyframes.
 - **Align** – align layers left, centre, right, top, middle or bottom, relative to the comp or the selection.
 - **Anchor Point** – move the anchor to any of nine positions without moving the layer.
+- **Stagger** – offset selected layers in time like a stair. The bottom layer stays put and each layer above moves one more step (e.g. 5, 10, 15 frames). Push forward or back, reverse the order, or line them all up again.
 
 ## Install
 

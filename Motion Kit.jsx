@@ -9,6 +9,7 @@
       Ease     — ease in / ease out influence on selected keyframes
       Align    — align layers to the comp or to the selection
       Anchor   — move the anchor point to a 3x3 grid position without moving the layer
+      Stagger  — offset selected layers in time, one step per layer, like a stair
 */
 (function motionKit(thisObj) {
     var NAME = "Motion Kit";
@@ -357,6 +358,45 @@
         });
     }
 
+    // ---------------------------------------------------------------- stagger
+
+    // Selected, unlocked layers in stack order, bottom first (or top first
+    // when reversed). The first layer in the list is the one that stays put.
+    function staggerLayers(comp, reverse) {
+        var sel = comp.selectedLayers, out = [], locked = 0;
+        for (var i = 0; i < sel.length; i++) {
+            if (sel[i].locked) locked++;
+            else out.push(sel[i]);
+        }
+        out.sort(function (a, b) { return reverse ? a.index - b.index : b.index - a.index; });
+        if (out.length < 2) {
+            alert(locked ? "Some selected layers are locked. Unlock them first." : "Select two or more layers.", NAME);
+            return null;
+        }
+        return out;
+    }
+
+    // Push each layer by one more step than the one before it, relative to
+    // where it is now. Negative frames push backwards in time.
+    function staggerOffset(frames, reverse) {
+        var comp = activeComp(); if (!comp) return;
+        var layers = staggerLayers(comp, reverse); if (!layers) return;
+        var step = frames * comp.frameDuration;
+        undoable("Stagger", function () {
+            for (var i = 1; i < layers.length; i++) layers[i].startTime += step * i;
+        });
+    }
+
+    // Line every layer's in-point up with the layer that stays put.
+    function staggerLineUp(reverse) {
+        var comp = activeComp(); if (!comp) return;
+        var layers = staggerLayers(comp, reverse); if (!layers) return;
+        undoable("Line Up", function () {
+            var target = layers[0].inPoint;
+            for (var i = 1; i < layers.length; i++) layers[i].startTime += target - layers[i].inPoint;
+        });
+    }
+
     // ---------------------------------------------------------------- UI
 
     function buildUI(thisObj) {
@@ -473,6 +513,31 @@
                 })(row, col);
             }
         }
+
+        // --- Stagger
+        var pS = win.add("panel", undefined, "Stagger");
+        pS.alignChildren = ["left", "top"];
+        pS.margins = [10, 14, 10, 10];
+        var rowS = pS.add("group");
+        rowS.alignChildren = ["left", "center"];
+        rowS.add("statictext", undefined, "Frames:");
+        var eFrames = rowS.add("edittext", undefined, "5");
+        eFrames.characters = 4;
+        eFrames.helpTip = "Offset per layer, in frames";
+        var cbReverse = rowS.add("checkbox", undefined, "Reverse");
+        cbReverse.helpTip = "Keep the top layer in place and step downwards";
+        var rowSB = pS.add("group");
+        rowSB.spacing = 4;
+        var bBack = rowSB.add("button", undefined, "◀ Back");
+        var bFwd = rowSB.add("button", undefined, "Forward ▶");
+        var bLineUp = rowSB.add("button", undefined, "Line up");
+        bBack.helpTip = "Push each layer earlier by one more step than the last";
+        bFwd.helpTip = "Push each layer later by one more step than the last";
+        bLineUp.helpTip = "Line every selected layer's start up with the one that stays put";
+        function frames() { return Math.abs(readNum(eFrames, 5)); }
+        bBack.onClick = function () { staggerOffset(-frames(), cbReverse.value); };
+        bFwd.onClick = function () { staggerOffset(frames(), cbReverse.value); };
+        bLineUp.onClick = function () { staggerLineUp(cbReverse.value); };
 
         win.onResizing = win.onResize = function () { this.layout.resize(); };
         win.layout.layout(true);
