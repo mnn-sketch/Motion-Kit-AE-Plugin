@@ -558,15 +558,17 @@
             body.spacing = 6;
 
             var settingKey = "collapsed_" + key;
-            function setCollapsed(c, relayout) {
+            var collapsed = false;
+            function setCollapsed(c, redraw) {
+                collapsed = c;
                 body.visible = !c;
                 body.maximumSize = [10000, c ? 0 : 10000];
                 tog.text = c ? "\u25B8" : "\u25BE";
                 try { app.settings.saveSetting(NAME, settingKey, c ? "1" : "0"); } catch (e) {}
-                if (relayout) relayout();
+                if (redraw) relayout();
             }
-            tog.onClick = function () { setCollapsed(body.visible, true); };
-            label.addEventListener("mousedown", function () { setCollapsed(body.visible, true); });
+            tog.onClick = function () { setCollapsed(!collapsed, true); };
+            label.addEventListener("mousedown", function () { setCollapsed(!collapsed, true); });
             var start = false;
             try { start = app.settings.haveSetting(NAME, settingKey) && app.settings.getSetting(NAME, settingKey) === "1"; } catch (e) {}
             p.__init = function () { if (start) setCollapsed(true, false); };
