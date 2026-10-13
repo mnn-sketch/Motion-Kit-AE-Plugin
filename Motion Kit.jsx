@@ -10,6 +10,7 @@
       Align    — align layers to the comp or to the selection
       Anchor   — move the anchor point to a 3x3 grid position without moving the layer
       Stagger  — offset selected layers in time, one step per layer, like a stair
+      Colours  — up to 5 hex palettes of up to 10 colours; click a swatch to apply it
 */
 (function motionKit(thisObj) {
     var NAME = "Motion Kit";
@@ -397,6 +398,100 @@
         });
     }
 
+    // ---------------------------------------------------------------- colours
+
+    var MAX_PALETTES = 5, MAX_COLOURS = 10;
+    var DEFAULT_COLOURS = ["#18181B", "#FFFFFF", "#F7F6F2", "#E2D3F9", "#7635D1", "#381070"];
+
+    // "#E83E8C", "e83e8c" or "#e8c" -> [r, g, b] in 0..1, or null.
+    function parseHex(str) {
+        var h = String(str).replace(/^#/, "");
+        if (/^[0-9a-fA-F]{3}$/.test(h)) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+        if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+        return [parseInt(h.substr(0, 2), 16) / 255, parseInt(h.substr(2, 2), 16) / 255, parseInt(h.substr(4, 2), 16) / 255];
+    }
+
+    function normHex(str) {
+        var c = parseHex(str);
+        if (!c) return null;
+        var out = "#";
+        for (var i = 0; i < 3; i++) {
+            var v = Math.round(c[i] * 255).toString(16).toUpperCase();
+            out += v.length < 2 ? "0" + v : v;
+        }
+        return out;
+    }
+
+    // Stored as "Name:#000000,#FFFFFF|Other:#..." (ExtendScript has no JSON).
+    function loadPalettes() {
+        var raw = "";
+        try { if (app.settings.haveSetting(NAME, "palettes")) raw = app.settings.getSetting(NAME, "palettes"); } catch (e) {}
+        var out = [], parts = raw ? raw.split("|") : [];
+        for (var i = 0; i < parts.length && out.length < MAX_PALETTES; i++) {
+            var k = parts[i].indexOf(":");
+            if (k < 0) continue;
+            var cols = parts[i].substr(k + 1);
+            out.push({ name: parts[i].substr(0, k), colours: cols ? cols.split(",") : [] });
+        }
+        // Old installs saved the original black/white default; upgrade it.
+        if (raw === "Palette 1:#000000,#FFFFFF") out = [];
+        if (!out.length) out.push({ name: "Palette 1", colours: DEFAULT_COLOURS.slice() });
+        return out;
+    }
+
+    function savePalettes(pals) {
+        var parts = [];
+        for (var i = 0; i < pals.length; i++) parts.push(pals[i].name + ":" + pals[i].colours.join(","));
+        try { app.settings.saveSetting(NAME, "palettes", parts.join("|")); } catch (e) {}
+    }
+
+    function setColourProp(prop, rgb, t) {
+        var v = [rgb[0], rgb[1], rgb[2], 1];
+        if (prop.numKeys > 0) prop.setValueAtTime(t, v); else prop.setValue(v);
+    }
+
+    // Selected colour properties win; otherwise colour the selected layers
+    // (shape fills, text fill colour, solid colour).
+    function applyColour(hex) {
+        var rgb = parseHex(hex);
+        var comp = activeComp(); if (!comp || !rgb) return;
+        var t = comp.time, done = 0, skipped = 0, i;
+        undoable("Colour", function () {
+            var props = selectedLeafProps(comp);
+            for (i = 0; i < props.length; i++) {
+                if (props[i].propertyValueType === PropertyValueType.COLOR) { setColourProp(props[i], rgb, t); done++; }
+            }
+            if (done) return;
+
+            var layers = comp.selectedLayers;
+            for (i = 0; i < layers.length; i++) {
+                var L = layers[i];
+                if (L.locked) { skipped++; continue; }
+                if (L instanceof ShapeLayer) {
+                    var n = 0;
+                    walkProps(L.property("ADBE Root Vectors Group"), function (p) {
+                        if (p.matchName === "ADBE Vector Fill Color") { setColourProp(p, rgb, t); n++; }
+                    });
+                    if (n) done++; else skipped++;
+                } else if (L instanceof TextLayer) {
+                    var td = L.property("ADBE Text Properties").property("ADBE Text Document");
+                    var doc = td.value;
+                    doc.applyFill = true;
+                    doc.fillColor = rgb;
+                    if (td.numKeys > 0) td.setValueAtTime(t, doc); else td.setValue(doc);
+                    done++;
+                } else if (L.source && L.source.mainSource instanceof SolidSource) {
+                    L.source.mainSource.color = rgb;
+                    done++;
+                } else {
+                    skipped++;
+                }
+            }
+        });
+        if (!done && !skipped) alert("Select a colour property, or shape, text or solid layers.", NAME);
+        else if (!done) alert("None of the selected layers have a colour to set. Select shape, text or solid layers, or a colour property.", NAME);
+    }
+
     // ---------------------------------------------------------------- UI
 
     function buildUI(thisObj) {
@@ -537,6 +632,122 @@
         var bEase = rowEB.add("button", undefined, "Apply to Selected Keys");
         bEase.alignment = ["fill", "center"];
         bEase.onClick = function () { applyEase(rIn.slider.value, rOut.slider.value); };
+
+        // --- Colours
+        var pC = section(colA, "Colours", "colours");
+        pC.alignChildren = ["left", "top"];
+        var palettes = loadPalettes(), current = 0;
+        try { current = Math.min(parseInt(app.settings.getSetting(NAME, "palette_current"), 10) || 0, palettes.length - 1); } catch (e) {}
+
+        var rowCP = pC.add("group");
+        rowCP.alignChildren = ["left", "center"];
+        rowCP.spacing = 4;
+        var ddPal = rowCP.add("dropdownlist");
+        ddPal.preferredSize = [110, -1]; ddPal.__fixed = true;
+        function smallBtn(text, tip) {
+            var b = rowCP.add("button", undefined, text);
+            b.preferredSize = [26, 22]; b.__fixed = true; b.helpTip = tip;
+            return b;
+        }
+        var bPalAdd = smallBtn("+", "New palette (up to " + MAX_PALETTES + ")");
+        var bPalEdit = smallBtn("✎", "Edit this palette's name and colours");
+        var bPalDel = smallBtn("×", "Delete this palette");
+
+        var swatchRow = pC.add("group");
+        swatchRow.spacing = 3;
+        swatchRow.alignChildren = ["left", "center"];
+
+        var editBox = pC.add("group");
+        editBox.orientation = "column";
+        editBox.alignChildren = ["fill", "top"];
+        editBox.spacing = 4;
+        var eName = editBox.add("edittext", undefined, "");
+        eName.helpTip = "Palette name";
+        var eHex = editBox.add("edittext", undefined, "");
+        eHex.helpTip = "Up to " + MAX_COLOURS + " hex codes separated by spaces, e.g. #000 #E83E8C #5BD3F0";
+        var bPalDone = editBox.add("button", undefined, "Save Palette");
+
+        function showEdit(on) {
+            editBox.visible = on;
+            editBox.maximumSize = [10000, on ? 10000 : 0];
+            if (on) {
+                eName.text = palettes[current].name;
+                eHex.text = palettes[current].colours.join(" ");
+            }
+        }
+
+        function rebuildSwatches() {
+            while (swatchRow.children.length) swatchRow.remove(swatchRow.children[0]);
+            var cols = palettes[current].colours;
+            for (var i = 0; i < cols.length; i++) {
+                (function (hex) {
+                    var sw = swatchRow.add("group");
+                    sw.preferredSize = [20, 20]; sw.__fixed = true;
+                    sw.helpTip = hex + " — click to apply";
+                    sw.graphics.backgroundColor = sw.graphics.newBrush(sw.graphics.BrushType.SOLID_COLOR, parseHex(hex));
+                    sw.addEventListener("mousedown", function () { applyColour(hex); });
+                })(cols[i]);
+            }
+            if (!cols.length) swatchRow.add("statictext", undefined, "No colours yet — click ✎");
+        }
+
+        function refreshPalettes(relayoutAfter) {
+            ddPal.removeAll();
+            for (var i = 0; i < palettes.length; i++) ddPal.add("item", palettes[i].name);
+            ddPal.selection = current;
+            bPalAdd.enabled = palettes.length < MAX_PALETTES;
+            bPalDel.enabled = palettes.length > 1;
+            rebuildSwatches();
+            try { app.settings.saveSetting(NAME, "palette_current", String(current)); } catch (e) {}
+            if (relayoutAfter) relayout();
+        }
+
+        ddPal.onChange = function () {
+            if (!ddPal.selection || ddPal.selection.index === current) return;
+            current = ddPal.selection.index;
+            showEdit(false);
+            refreshPalettes(true);
+        };
+        bPalAdd.onClick = function () {
+            if (palettes.length >= MAX_PALETTES) return;
+            palettes.push({ name: "Palette " + (palettes.length + 1), colours: [] });
+            current = palettes.length - 1;
+            savePalettes(palettes);
+            refreshPalettes(false);
+            showEdit(true);
+            relayout();
+        };
+        bPalEdit.onClick = function () { showEdit(!editBox.visible); relayout(); };
+        bPalDel.onClick = function () {
+            if (palettes.length < 2) return;
+            if (!confirm("Delete the palette \"" + palettes[current].name + "\"?", true, NAME)) return;
+            palettes.splice(current, 1);
+            current = Math.max(0, current - 1);
+            savePalettes(palettes);
+            showEdit(false);
+            refreshPalettes(true);
+        };
+        bPalDone.onClick = function () {
+            var tokens = eHex.text.split(/[\s,;]+/), cols = [], bad = [];
+            for (var i = 0; i < tokens.length; i++) {
+                if (!tokens[i]) continue;
+                var h = normHex(tokens[i]);
+                if (h) cols.push(h); else bad.push(tokens[i]);
+            }
+            if (bad.length) { alert("These aren't valid hex codes: " + bad.join(", "), NAME); return; }
+            if (cols.length > MAX_COLOURS) {
+                alert("Only the first " + MAX_COLOURS + " colours were kept.", NAME);
+                cols = cols.slice(0, MAX_COLOURS);
+            }
+            var name = eName.text.replace(/[|:]/g, "").replace(/^\s+|\s+$/g, "");
+            palettes[current] = { name: name || ("Palette " + (current + 1)), colours: cols };
+            savePalettes(palettes);
+            showEdit(false);
+            refreshPalettes(true);
+        };
+
+        showEdit(false);
+        refreshPalettes(false);
 
         // --- Align
         var pA = section(colB, "Align", "align");
