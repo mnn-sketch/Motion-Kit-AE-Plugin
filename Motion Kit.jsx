@@ -405,13 +405,84 @@
             : new Window("palette", NAME, undefined, { resizeable: true });
         win.orientation = "column";
         win.alignChildren = ["fill", "top"];
-        win.spacing = 8;
-        win.margins = 10;
+        win.spacing = 0;
+
+        // ScriptUI stores the sizes it computes in each element's
+        // preferredSize and reuses them on the next layout, so after an
+        // orientation change everything keeps its old size. Clear them first.
+        function resetSizes(el) {
+            if (!el.__fixed) el.preferredSize = [-1, -1];
+            if (el.children) for (var i = 0; i < el.children.length; i++) resetSizes(el.children[i]);
+        }
+        var colWidths = null;
+        function relayout() {
+            resetSizes(cols);
+            if (colWidths) {
+                // Assign whole sizes: setting only .width doesn't stick in ScriptUI.
+                colA.preferredSize = [colWidths[0], -1];
+                colB.preferredSize = [colWidths[1], -1];
+            }
+            win.layout.layout(true);
+            win.layout.resize();
+        }
+        win.margins = 8;
+
+        // Two columns of sections. They sit side by side when the panel is
+        // wide enough, and stack when it is narrow (see reflow below).
+        var cols = win.add("group");
+        cols.orientation = "column";
+        cols.alignChildren = ["fill", "top"];
+        cols.spacing = 8;
+        function column() {
+            var c = cols.add("group");
+            c.orientation = "column";
+            c.alignChildren = ["fill", "top"];
+            c.spacing = 6;
+            return c;
+        }
+        var colA = column(), colB = column();
+
+        // A collapsible section: header with a toggle, and a body that hides.
+        // Collapsed state is remembered between sessions.
+        function section(parent, title, key) {
+            var p = parent.add("panel");
+            p.alignChildren = ["fill", "top"];
+            p.margins = [8, 6, 8, 8];
+            p.spacing = 6;
+            var head = p.add("group");
+            head.alignChildren = ["left", "center"];
+            head.spacing = 4;
+            var tog = head.add("button", undefined, "\u25BE");
+            tog.preferredSize = [22, 20]; tog.__fixed = true;
+            tog.helpTip = "Show / hide";
+            var label = head.add("statictext", undefined, title);
+            try { label.graphics.font = ScriptUI.newFont(label.graphics.font.name, "BOLD", label.graphics.font.size); } catch (e) {}
+            var body = p.add("group");
+            body.orientation = "column";
+            body.alignChildren = ["fill", "top"];
+            body.spacing = 6;
+
+            var settingKey = "collapsed_" + key;
+            function setCollapsed(c, relayout) {
+                body.visible = !c;
+                body.maximumSize = [10000, c ? 0 : 10000];
+                tog.text = c ? "\u25B8" : "\u25BE";
+                try { app.settings.saveSetting(NAME, settingKey, c ? "1" : "0"); } catch (e) {}
+                if (relayout) relayout();
+            }
+            tog.onClick = function () { setCollapsed(body.visible, true); };
+            label.addEventListener("mousedown", function () { setCollapsed(body.visible, true); });
+            var start = false;
+            try { start = app.settings.haveSetting(NAME, settingKey) && app.settings.getSetting(NAME, settingKey) === "1"; } catch (e) {}
+            p.__init = function () { if (start) setCollapsed(true, false); };
+            sections.push(p);
+            return body;
+        }
+        var sections = [];
 
         // --- Bounce
-        var pB = win.add("panel", undefined, "Bounce / Excite");
+        var pB = section(colA, "Bounce / Excite", "bounce");
         pB.alignChildren = ["fill", "top"];
-        pB.margins = [10, 14, 10, 10];
         var rowB = pB.add("group");
         rowB.alignChildren = ["left", "top"];
         function numField(parent, label, val, tip) {
@@ -427,6 +498,7 @@
         var eDecay = numField(rowB, "Decay", 2.0, "How quickly it settles");
         var cbLive = pB.add("checkbox", undefined, "Add sliders to layer (tweak later)");
         cbLive.value = true;
+        cbLive.alignment = ["left", "top"];
         var rowBB = pB.add("group");
         var bApply = rowBB.add("button", undefined, "Apply Bounce");
         var bRemove = rowBB.add("button", undefined, "Remove");
@@ -438,13 +510,12 @@
         bRemove.onClick = removeBounce;
 
         // --- Ease
-        var pE = win.add("panel", undefined, "Easing");
+        var pE = section(colA, "Easing", "ease");
         pE.alignChildren = ["fill", "top"];
-        pE.margins = [10, 14, 10, 10];
         function easeRow(label, val) {
             var g = pE.add("group");
             g.alignChildren = ["fill", "center"];
-            var s = g.add("statictext", undefined, label); s.preferredSize.width = 34;
+            var s = g.add("statictext", undefined, label); s.preferredSize = [34, -1]; s.__fixed = true;
             var sl = g.add("slider", undefined, val, 0.1, 100); sl.alignment = ["fill", "center"];
             var e = g.add("edittext", undefined, String(val)); e.characters = 4;
             sl.onChanging = function () { e.text = String(Math.round(sl.value)); if (g.onSync) g.onSync(sl.value); };
@@ -468,15 +539,17 @@
         bEase.onClick = function () { applyEase(rIn.slider.value, rOut.slider.value); };
 
         // --- Align
-        var pA = win.add("panel", undefined, "Align");
+        var pA = section(colB, "Align", "align");
         pA.alignChildren = ["left", "top"];
-        pA.margins = [10, 14, 10, 10];
         var rowAT = pA.add("group");
         rowAT.add("statictext", undefined, "Align to:");
         var ddTarget = rowAT.add("dropdownlist", undefined, ["Composition", "Selection"]);
         ddTarget.selection = 0;
-        var rowA = pA.add("group");
-        rowA.spacing = 4;
+        var alignWrap = pA.add("group");
+        alignWrap.spacing = 4;
+        alignWrap.alignChildren = ["left", "top"];
+        var alignH = alignWrap.add("group"), alignV = alignWrap.add("group");
+        alignH.spacing = alignV.spacing = 4;
         var aligns = [
             ["⇤", "left", "Align left edges"],
             ["↔", "hcenter", "Align horizontal centres"],
@@ -486,18 +559,17 @@
             ["⤓", "bottom", "Align bottom edges"]
         ];
         for (var a = 0; a < aligns.length; a++) {
-            (function (def) {
-                var b = rowA.add("button", undefined, def[0]);
-                b.preferredSize = [32, 26];
+            (function (def, i) {
+                var b = (i < 3 ? alignH : alignV).add("button", undefined, def[0]);
+                b.preferredSize = [32, 26]; b.__fixed = true;
                 b.helpTip = def[2];
                 b.onClick = function () { alignLayers(def[1], ddTarget.selection.index === 1); };
-            })(aligns[a]);
+            })(aligns[a], a);
         }
 
         // --- Anchor
-        var pN = win.add("panel", undefined, "Anchor Point");
+        var pN = section(colB, "Anchor Point", "anchor");
         pN.alignChildren = ["left", "top"];
-        pN.margins = [10, 14, 10, 10];
         var grid = pN.add("group");
         grid.orientation = "column"; grid.spacing = 3;
         var glyphs = [["↖", "↑", "↗"], ["←", "●", "→"], ["↙", "↓", "↘"]];
@@ -507,7 +579,7 @@
             for (var col = 0; col < 3; col++) {
                 (function (r, c) {
                     var b = gr.add("button", undefined, glyphs[r][c]);
-                    b.preferredSize = [34, 26];
+                    b.preferredSize = [34, 26]; b.__fixed = true;
                     b.helpTip = "Anchor: " + tips[r][c];
                     b.onClick = function () { moveAnchor(c / 2, r / 2); };
                 })(row, col);
@@ -515,9 +587,8 @@
         }
 
         // --- Stagger
-        var pS = win.add("panel", undefined, "Stagger");
+        var pS = section(colB, "Stagger", "stagger");
         pS.alignChildren = ["left", "top"];
-        pS.margins = [10, 14, 10, 10];
         var rowS = pS.add("group");
         rowS.alignChildren = ["left", "center"];
         rowS.add("statictext", undefined, "Frames:");
@@ -528,8 +599,10 @@
         cbReverse.helpTip = "Keep the top layer in place and step downwards";
         var rowSB = pS.add("group");
         rowSB.spacing = 4;
-        var bBack = rowSB.add("button", undefined, "◀ Back");
-        var bFwd = rowSB.add("button", undefined, "Forward ▶");
+        var rowBF = rowSB.add("group");
+        rowBF.spacing = 4;
+        var bBack = rowBF.add("button", undefined, "◀ Back");
+        var bFwd = rowBF.add("button", undefined, "Forward ▶");
         var bLineUp = rowSB.add("button", undefined, "Line up");
         bBack.helpTip = "Push each layer earlier by one more step than the last";
         bFwd.helpTip = "Push each layer later by one more step than the last";
@@ -539,8 +612,81 @@
         bFwd.onClick = function () { staggerOffset(frames(), cbReverse.value); };
         bLineUp.onClick = function () { staggerLineUp(cbReverse.value); };
 
-        win.onResizing = win.onResize = function () { this.layout.resize(); };
+        // ------------------------------------------------ responsive layout
+
+        // Right edge of a group's content (its children aren't stretched).
+        function contentWidth(g) {
+            var w = 0;
+            for (var i = 0; i < g.children.length; i++) {
+                var c = g.children[i];
+                w = Math.max(w, c.location[0] + c.size[0]);
+            }
+            return w;
+        }
+
+        // Align: 0 = one row of six, 1 = two rows of three,
+        // 2 = two columns of three (label above the dropdown).
+        function setAlignMode(m) {
+            rowAT.orientation = m === 2 ? "column" : "row";
+            rowAT.alignChildren = m === 2 ? ["left", "top"] : ["left", "center"];
+            alignWrap.orientation = m === 1 ? "column" : "row";
+            alignH.orientation = alignV.orientation = m === 2 ? "column" : "row";
+        }
+        // Stagger: 0 = one row, 1 = Line up on its own row below.
+        function setStaggerMode(m) {
+            rowSB.orientation = m === 1 ? "column" : "row";
+            rowSB.alignChildren = m === 1 ? ["fill", "top"] : ["left", "center"];
+            // Explicit width, otherwise ScriptUI hands Line up the leftover space.
+            bLineUp.__fixed = true;
+            bLineUp.preferredSize = [m === 1 ? 2 * BTN_W + rowBF.spacing : BTN_W, -1];
+        }
+
+        // Measure every variant once, before any section is collapsed.
+        // Columns are measured at their natural width (no stretching).
+        var PANEL_PAD = 20;
+        cols.alignChildren = ["left", "top"];
+        relayout();
+        var BTN_W = Math.max(bBack.size[0], bFwd.size[0]);
+        bBack.preferredSize = bFwd.preferredSize = [BTN_W, -1];
+        bBack.__fixed = bFwd.__fixed = true;
+        var alignW = [], staggerW = [], m;
+        for (m = 0; m < 3; m++) {
+            setAlignMode(m); setStaggerMode(m === 0 ? 0 : 1);
+            relayout();
+            alignW[m] = contentWidth(pA);
+            if (m < 2) staggerW[m] = contentWidth(pS);
+        }
+        // Left column: a little wider than it naturally needs.
+        var capA = Math.round(colA.size[0] * 1.1);
+
+        for (var si = 0; si < sections.length; si++) sections[si].__init();
+
+        var state = "";
+        function reflow() {
+            var avail = win.size.width - 16;
+            var rightNeed = Math.max(alignW[1], staggerW[1], contentWidth(pN)) + PANEL_PAD;
+            var twoCol = avail >= capA + cols.spacing + rightNeed;
+            var aW = twoCol ? capA : avail;
+            var bW = twoCol ? avail - capA - cols.spacing : avail;
+            var inner = bW - PANEL_PAD;
+            // Bracketed on purpose: ExtendScript evaluates unbracketed chained
+            // ternaries wrongly (a ? 0 : b ? 1 : 2 gives 2 when a is true).
+            var am = (alignW[0] <= inner) ? 0 : ((alignW[1] <= inner) ? 1 : 2);
+            var sm = staggerW[0] <= inner ? 0 : 1;
+
+            var next = [twoCol, am, sm, aW, bW].join(",");
+            if (next === state) return;
+            state = next;
+            cols.orientation = twoCol ? "row" : "column";
+            cols.alignChildren = ["left", "top"];
+            setAlignMode(am);
+            setStaggerMode(sm);
+            colWidths = [aW, bW];
+            relayout();
+        }
+        win.onResizing = win.onResize = reflow;
         win.layout.layout(true);
+        reflow();
         return win;
     }
 
