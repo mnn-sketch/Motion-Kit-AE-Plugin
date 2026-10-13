@@ -24,3 +24,7 @@ It opens as a normal panel. Drag it by its tab to dock it anywhere in your works
 ## Update
 
 To install a newer version, repeat the install steps with the new `Motion Kit.jsx`. Let it overwrite the old one, then restart After Effects.
+
+## License
+
+[MIT](LICENSE) © 2026 Mads Naumann
