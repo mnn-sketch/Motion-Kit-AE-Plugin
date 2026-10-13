@@ -77,10 +77,19 @@
         return out;
     }
 
+    // Layers that have a source rect and effects. Note: `instanceof AVLayer`
+    // is false for shape and text layers in ExtendScript, so exclude cameras
+    // and lights instead.
     function selectedAVLayers(comp) {
-        var out = [], sel = comp.selectedLayers;
+        var out = [], sel = comp.selectedLayers, locked = 0;
         for (var i = 0; i < sel.length; i++) {
-            if (sel[i] instanceof AVLayer && !sel[i].locked) out.push(sel[i]);
+            var L = sel[i];
+            if (L instanceof CameraLayer || L instanceof LightLayer) continue;
+            if (L.locked) { locked++; continue; }
+            out.push(L);
+        }
+        if (!out.length) {
+            alert(locked ? "The selected layers are locked. Unlock them first." : "Select one or more layers.", NAME);
         }
         return out;
     }
@@ -275,7 +284,7 @@
     function alignLayers(mode, toSelection) {
         var comp = activeComp(); if (!comp) return;
         var layers = selectedAVLayers(comp);
-        if (!layers.length) { alert("Select one or more layers.", NAME); return; }
+        if (!layers.length) return;
         if (toSelection && layers.length < 2) toSelection = false;
 
         undoable("Align", function () {
@@ -321,7 +330,7 @@
     function moveAnchor(fx, fy) {
         var comp = activeComp(); if (!comp) return;
         var layers = selectedAVLayers(comp);
-        if (!layers.length) { alert("Select one or more layers.", NAME); return; }
+        if (!layers.length) return;
 
         undoable("Anchor Point", function () {
             var t = comp.time;
