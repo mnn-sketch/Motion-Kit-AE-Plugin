@@ -1,13 +1,34 @@
 # Motion Kit – AE Plugin
 
-A dockable ScriptUI panel for Adobe After Effects with four quick tools:
+A dockable panel for Adobe After Effects with six small tools for everyday motion work. Every section can be collapsed, and the layout adapts to the panel's size: one column when it's narrow, two columns when it's wide.
 
-- **Bounce / Excite** – one-click inertial bounce expression on selected keyframed properties, with amplitude, frequency and decay. Optionally adds slider controls to the layer so you can tweak it later.
-- **Easing** – ease in / ease out influence (plus a linked "Both" slider) applied to selected keyframes.
-- **Align** – align layers left, centre, right, top, middle or bottom, relative to the comp or the selection.
-- **Anchor Point** – move the anchor to any of nine positions without moving the layer.
-- **Stagger** – offset selected layers in time like a stair. The bottom layer stays put and each layer above moves one more step (e.g. 5, 10, 15 frames). Push forward or back, reverse the order, or line them all up again.
-- **Colours** – up to 5 palettes of up to 10 hex colours. Click a swatch to set the selected colour property, or to colour the selected shape, text or solid layers.
+## Features
+
+### Bounce / Excite
+Adds an inertial bounce to anything that's keyframed. Select one or more keyframed properties (Position, Scale, Rotation…), set **Amplitude** (how far it overshoots), **Frequency** (wobbles per second) and **Decay** (how quickly it settles), and click **Apply Bounce**.
+
+With **Add sliders to layer** ticked, the three values become slider controls on the layer, so you can tweak or keyframe them later in Effect Controls. **Remove** takes the bounce off the selected properties, or off whole selected layers (sliders included) if no property is selected.
+
+### Easing
+Select keyframes, set the **In** and **Out** influence (0–100%), and click **Apply to Selected Keys**. **Both** moves In and Out together.
+
+### Align
+Select layers and align their left, centre, right, top, middle or bottom edges. **Align to** chooses between the composition and the selection. It uses each layer's visible edges, so scale, rotation and parenting are taken into account, and animated layers move with their whole animation.
+
+### Anchor Point
+Move the anchor point to any of nine positions (corners, edges or centre) without the layer moving on screen.
+
+### Stagger
+Offsets the selected layers in time like a staircase. The bottom layer stays put and each layer above moves one more step, e.g. 5, 10, 15 frames.
+
+- **Forward ▶ / ◀ Back** push the layers later or earlier. Each click adds to the current timing, so Back undoes Forward.
+- **Reverse** keeps the top layer in place instead.
+- **Line up** moves every selected layer back to start at the same frame.
+
+### Colours
+Up to 5 palettes of up to 10 colours each. Click a swatch to set any colour property you've selected in the timeline. If you haven't selected one, it colours the selected layers: shape layer fills, text fill colour, or a solid's colour.
+
+Use **+** for a new palette, **✎** to edit one (type hex codes separated by spaces, e.g. `#18181B #FFF 7635D1`) and **×** to delete. Palettes are saved between sessions.
 
 ## Install
 

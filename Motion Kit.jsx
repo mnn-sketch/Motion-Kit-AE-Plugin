@@ -660,6 +660,7 @@
         var editBox = pC.add("group");
         editBox.orientation = "column";
         editBox.alignChildren = ["fill", "top"];
+        editBox.alignment = ["fill", "top"];
         editBox.spacing = 4;
         var eName = editBox.add("edittext", undefined, "");
         eName.helpTip = "Palette name";
@@ -682,10 +683,19 @@
             for (var i = 0; i < cols.length; i++) {
                 (function (hex) {
                     var sw = swatchRow.add("group");
+                    // White outer group as a 1px outline, so dark colours
+                    // stay visible on AE's dark UI. Clicks are handled on both,
+                    // ignoring ones that bubble up from the fill.
                     sw.preferredSize = [20, 20]; sw.__fixed = true;
+                    sw.margins = 1;
                     sw.helpTip = hex + " — click to apply";
-                    sw.graphics.backgroundColor = sw.graphics.newBrush(sw.graphics.BrushType.SOLID_COLOR, parseHex(hex));
-                    sw.addEventListener("mousedown", function () { applyColour(hex); });
+                    sw.graphics.backgroundColor = sw.graphics.newBrush(sw.graphics.BrushType.SOLID_COLOR, [1, 1, 1]);
+                    var fill = sw.add("group");
+                    fill.preferredSize = [18, 18]; fill.__fixed = true;
+                    fill.helpTip = sw.helpTip;
+                    fill.graphics.backgroundColor = fill.graphics.newBrush(fill.graphics.BrushType.SOLID_COLOR, parseHex(hex));
+                    fill.addEventListener("mousedown", function () { applyColour(hex); });
+                    sw.addEventListener("mousedown", function (e) { if (e.target === sw) applyColour(hex); });
                 })(cols[i]);
             }
             if (!cols.length) swatchRow.add("statictext", undefined, "No colours yet — click ✎");
