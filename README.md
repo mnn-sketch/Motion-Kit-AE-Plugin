@@ -7,6 +7,7 @@ A dockable ScriptUI panel for Adobe After Effects with four quick tools:
 - **Align** – align layers left, centre, right, top, middle or bottom, relative to the comp or the selection.
 - **Anchor Point** – move the anchor to any of nine positions without moving the layer.
 - **Stagger** – offset selected layers in time like a stair. The bottom layer stays put and each layer above moves one more step (e.g. 5, 10, 15 frames). Push forward or back, reverse the order, or line them all up again.
+- **Colours** – up to 5 palettes of up to 10 hex colours. Click a swatch to set the selected colour property, or to colour the selected shape, text or solid layers.
 
 ## Install
 
